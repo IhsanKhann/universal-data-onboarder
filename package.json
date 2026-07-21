@@ -1,7 +1,7 @@
 {
   "name": "@offerberries/universal-data-onboarder",
   "version": "0.1.0",
-  "description": "Universal Data Onboarding Engine — standalone, adapter-driven import pipeline extracted from OfferBerries. CSV/JSON/XLSX/SQL streaming parser, guardrail, mapping, validation, and idempotent commit engine.",
+  "description": "Universal Data Onboarding Engine \u2014 standalone, adapter-driven import pipeline extracted from OfferBerries. CSV/JSON/XLSX/SQL streaming parser, guardrail, mapping, validation, and idempotent commit engine.",
   "type": "module",
   "main": "core/index.js",
   "types": "registry/TargetDescriptor.d.ts",
@@ -28,7 +28,9 @@
     "test:contract": "node --experimental-vm-modules node_modules/.bin/jest --testMatch '**/__contract-tests__/*.test.js'",
     "lint": "eslint .",
     "check": "node --check core/**/*.js registry/**/*.js orchestration/**/*.js worker/**/*.js",
-    "prepublishOnly": "npm run test && npm run check"
+    "prepublishOnly": "npm run test && npm run check",
+    "test:native": "node --test tests/**/*.test.js",
+    "pretest:native": "echo \"Run: node tests/e2e-native-runner.mjs or node --test\""
   },
   "dependencies": {
     "@google-cloud/storage": "^7.0.0",
