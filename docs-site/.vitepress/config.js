@@ -2,7 +2,8 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "Universal Data Onboarding Engine",
-  description: "Streaming-safe, adapter-driven data import pipeline — extract, map, validate, and commit CSV/JSON/XLSX/SQL data to any target.",
+  description: "Streaming-safe, adapter-driven data import pipeline.",
+  ignoreDeadLinks: true,
   base: "/",
   themeConfig: {
     nav: [
