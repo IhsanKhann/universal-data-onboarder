@@ -66,10 +66,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/offerberries/universal-data-onboarder"
+    "url": "https://github.com/IhsanKhann/universal-data-onboarder.git"
   },
   "bugs": {
-    "url": "https://github.com/offerberries/universal-data-onboarder/issues"
+    "url": "https://github.com/IhsanKhann/universal-data-onboarder/issues"
   },
-  "homepage": "https://github.com/offerberries/universal-data-onboarder#readme"
+  "homepage": "https://github.com/IhsanKhann/universal-data-onboarder#readme"
 }
