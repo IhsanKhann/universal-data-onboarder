@@ -4,7 +4,7 @@ export default defineConfig({
   title: "Universal Data Onboarding Engine",
   description: "Streaming-safe, adapter-driven data import pipeline.",
   ignoreDeadLinks: true,
-  base: "/",
+  base: process.env.BASE_URL || "/universal-data-onboarder/",
   themeConfig: {
     nav: [
       { text: "Home", link: "/" },

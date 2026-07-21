@@ -47,6 +47,8 @@ jobs:
 
       - name: Build React UI demo
         working-directory: ./packages/react-ui
+        env:
+          VITE_BASE_PATH: /universal-data-onboarder/demo/
         run: |
           npm install --no-fund --loglevel=error
           npm run build

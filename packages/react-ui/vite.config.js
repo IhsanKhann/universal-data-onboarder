@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: process.env.VITE_BASE_PATH || "/demo/",
+  base: process.env.VITE_BASE_PATH || "/universal-data-onboarder/demo/",
   build: {
     outDir: "dist",
     sourcemap: false,
