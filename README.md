@@ -50,7 +50,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 | Interface | File | Default | Alternatives |
 |---|---|---|---|
 | JobStore | `orchestration/jobStore.js` | Mongoose | In-memory (testing) |
-| QueueAdapter | `queueing/QueueAdapter.js` | BobbMQ | In-memory (testing) |
+| QueueAdapter | `queueing/QueueAdapter.js` | BullMQ | In-memory (testing) |
 | StorageAdapter | `storage/StorageAdapter.js` | Local FS | GCS |
 | ConnectionResolver | `topology/ConnectionResolver.js` | Single connection | Multi-tenant |
 

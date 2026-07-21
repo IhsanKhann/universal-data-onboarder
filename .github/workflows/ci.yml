@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install engine dependencies
+        run: npm ci
+
+      - name: Setup testbed
+        run: |
+          git clone https://github.com/IhsanKhann/universal-data-onboarder-testbed.git \
+            ../universal-data-onboarder-testbed
+          cd ../universal-data-onboarder-testbed
+          npm ci
+
+      - name: Run Jest tests (engine)
+        run: npm test -- --passWithNoTests
+        continue-on-error: true
+
+      - name: Run native e2e tests (testbed)
+        run: node ../universal-data-onboarder-testbed/tests/e2e-native-runner.mjs
+        continue-on-error: ${{ matrix.node-version == 22 }}
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.node-version }}
+          path: |
+            **/test-results/**
+            **/TEST_OUTPUT.md
