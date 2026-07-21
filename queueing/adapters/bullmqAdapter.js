@@ -14,7 +14,7 @@ function getQueueName() {
   return process.env.QUEUE_NAME || "onboarder-migration-commit";
 }
 
-const getQueue = () => {
+const getQueue = async () => {
   if (!_queue) {
     // Dynamic import for ESM compatibility
     const { default: IORedis } = await import("ioredis");

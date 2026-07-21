@@ -17,7 +17,7 @@ import { createMongooseJobStore } from "../../orchestration/jobStore.js";
 import { isDuplicateKeyError, connectionSupportsTransactions } from "./idempotency.js";
 import logger from "../../utils/logger.js";
 
-const jobStore = createMongooseJobStore();
+const defaultJobStore = createMongooseJobStore();
 
 const SERVICE = "importCommit.service";
 
@@ -53,11 +53,13 @@ const MIGRATION_SYNC_COMMIT_THRESHOLD =
 // ── commitBatch ───────────────────────────────────────────────────────────────
 // Row-level cursor + updateOne patterns go through the jobStore interface,
 // not direct Mongoose model getters — no #-alias imports, no OfferBerries
-// domain coupling. The jobStore is Mongoose-backed by default but swappable.
+// domain coupling. The jobStore is Mongoose-backed by default but swappable
+// via the `jobStore` option for tests and alternative adapters.
 export const commitBatch = async (
   tenantId, importJobId, descriptor,
-  { conn = mongoose, actorId = null, limit = null } = {}
+  { conn = mongoose, actorId = null, limit = null, jobStore } = {}
 ) => {
+  const store = jobStore || defaultJobStore;
   const useTransaction = Boolean(descriptor.commitInTransaction) && connectionSupportsTransactions(conn);
   if (descriptor.commitInTransaction && !useTransaction) {
     logger.warn(
@@ -69,7 +71,7 @@ export const commitBatch = async (
 
   // Warm the jobStore cache by fetching the job once (ensures models are
   // loaded into conn.__stagedRecordModel before cursorStaged is called).
-  await jobStore.getJob(tenantId, importJobId, conn);
+  await store.getJob(tenantId, importJobId, conn);
 
   let committed = 0;
   let failed = 0;
@@ -79,7 +81,7 @@ export const commitBatch = async (
     validationStatus: "valid",
     commitStatus: { $in: ["pending", "committing"] },
   };
-  const cursor = jobStore.cursorStaged(conn, filter, { sort: { rowIndex: 1 }, limit });
+  const cursor = store.cursorStaged(conn, filter, { sort: { rowIndex: 1 }, limit });
 
   for await (const record of cursor) {
     if (useTransaction) {
@@ -88,7 +90,7 @@ export const commitBatch = async (
         await session.withTransaction(async () => {
           const { entityId, entityModel } =
             await descriptor.commitRow(tenantId, record.mappedFields, { conn, actorId, session });
-          await jobStore.updateOneStaged(
+          await store.updateOneStaged(
             { _id: record._id },
             { $set: { commitStatus: "committed", committedEntityId: entityId, committedEntityModel: entityModel, commitError: null } },
             conn,
@@ -97,7 +99,7 @@ export const commitBatch = async (
         });
         committed += 1;
       } catch (err) {
-        await jobStore.updateOneStaged(
+        await store.updateOneStaged(
           { _id: record._id },
           { $set: { commitStatus: "failed", commitError: err.message } },
           conn
@@ -113,7 +115,7 @@ export const commitBatch = async (
     }
 
     const wasReserved = record.commitStatus === "committing";
-    await jobStore.updateOneStaged(
+    await store.updateOneStaged(
       { _id: record._id },
       { $set: { commitStatus: "committing" } },
       conn
@@ -122,7 +124,7 @@ export const commitBatch = async (
     try {
       const { entityId, entityModel } =
         await descriptor.commitRow(tenantId, record.mappedFields, { conn, actorId });
-      await jobStore.updateOneStaged(
+      await store.updateOneStaged(
         { _id: record._id },
         { $set: { commitStatus: "committed", committedEntityId: entityId, committedEntityModel: entityModel, commitError: null } },
         conn
@@ -130,7 +132,7 @@ export const commitBatch = async (
       committed += 1;
     } catch (err) {
       if (isDuplicateKeyError(err) && wasReserved) {
-        await jobStore.updateOneStaged(
+        await store.updateOneStaged(
           { _id: record._id },
           { $set: { commitStatus: "committed", commitError: null } },
           conn
@@ -140,7 +142,7 @@ export const commitBatch = async (
           tenantId, importJobId: String(importJobId), rowId: String(record._id),
         });
       } else {
-        await jobStore.updateOneStaged(
+        await store.updateOneStaged(
           { _id: record._id },
           { $set: { commitStatus: "failed", commitError: err.message } },
           conn
@@ -158,7 +160,7 @@ export const commitBatch = async (
 
 // ── commitImportJob ───────────────────────────────────────────────────────────
 export const commitImportJob = async (tenantId, importJobId, { actorId = null } = {}, conn = mongoose) => {
-  const job = await jobStore.getJob(tenantId, importJobId, conn);
+  const job = await defaultJobStore.getJob(tenantId, importJobId, conn);
   if (job.status !== "validated") {
     throw Object.assign(
       new Error(`Cannot commit an import job in status "${job.status}" — expected "validated"`),
@@ -170,7 +172,7 @@ export const commitImportJob = async (tenantId, importJobId, { actorId = null } 
   const validCount = job.counts?.validRows ?? 0;
   const mode = validCount > MIGRATION_SYNC_COMMIT_THRESHOLD ? "async" : "sync";
 
-  await jobStore.updateJobModel(conn,
+  await defaultJobStore.updateJobModel(conn,
     { _id: job._id, tenantId },
     { status: "committing", "commit.mode": mode, "commit.startedAt": new Date() }
   );
@@ -185,7 +187,7 @@ export const commitImportJob = async (tenantId, importJobId, { actorId = null } 
   const skipped = Math.max(validCount - committed - failed, 0);
   const finalStatus = (failed > 0 || skipped > 0) ? "completed_with_errors" : "completed";
 
-  await jobStore.updateJobModel(conn,
+  await defaultJobStore.updateJobModel(conn,
     { _id: job._id, tenantId },
     { status: finalStatus, "commit.completedAt": new Date(), "counts.committedRows": committed, "counts.commitFailedRows": failed, "counts.skippedRows": skipped }
   );
