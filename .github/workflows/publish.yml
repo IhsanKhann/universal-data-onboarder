@@ -1,7 +1,7 @@
 # Universal Data Onboarding Engine — npm publish workflow
 #
 # Triggered only on pushing a tag matching v*.*.* (e.g. v0.1.0).
-# Runs tests, then publishes each workspace package to npm.
+# Runs tests, then publishes the package to npm.
 #
 # Manual trigger: git tag v0.1.0 && git push --tags
 
@@ -27,9 +27,9 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test --workspaces --if-present
+        run: npm test
 
-  publish-core:
+  publish:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -44,26 +44,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Publish core package
+      - name: Publish to npm
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-    needs: test
-    runs-on: ubuntu-latest
-    if: false # Testbed is a private/internal tool — not published to npm
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: IhsanKhann/universal-data-onboarder-testbed
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Dry run (testbed is not published)
-        run: npm publish --dry-run
