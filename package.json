@@ -29,8 +29,7 @@
     "lint": "eslint .",
     "check": "node --check core/**/*.js registry/**/*.js orchestration/**/*.js worker/**/*.js",
     "prepublishOnly": "npm run test && npm run check",
-    "test:native": "node --test tests/**/*.test.js",
-    "pretest:native": "echo \"Run: node tests/e2e-native-runner.mjs or node --test\""
+    "test:native": "echo \"No native tests in engine; run in testbed: cd ../universal-data-onboarder-testbed && npm run test:native\""
   },
   "dependencies": {
     "@google-cloud/storage": "^7.0.0",
