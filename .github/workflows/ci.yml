@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -31,11 +31,11 @@ jobs:
           path: universal-data-onboarder-testbed
 
       - name: Install engine dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund --loglevel=error
         working-directory: universal-data-onboarder
 
       - name: Install testbed dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund --loglevel=error
         working-directory: universal-data-onboarder-testbed
 
       - name: Run Jest tests (engine)
