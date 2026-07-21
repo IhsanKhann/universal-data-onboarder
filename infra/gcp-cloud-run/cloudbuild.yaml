@@ -1,0 +1,29 @@
+# Cloud Build config for the Migration Wizard Cloud Run Job image.
+#
+# A config file rather than `gcloud builds submit --tag` because that shortcut
+# only accepts a Dockerfile literally named "Dockerfile", and this image builds
+# from Dockerfile.migration (the main Dockerfile's pm2-runtime CMD is wrong for
+# a Job — see Dockerfile.migration's header).
+#
+# See docs/MIGRATION_WIZARD_CLOUD_RUN_IMPLEMENTATION_CHECKLIST_2026-07-16.md §6/§7.
+substitutions:
+  _IMAGE: asia-south1-docker.pkg.dev/beaming-magnet-457513-k8/migration-runner/entrypoint
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.migration
+      - -t
+      - ${_IMAGE}:${SHORT_SHA}
+      - -t
+      - ${_IMAGE}:latest
+      - .
+
+images:
+  - ${_IMAGE}:${SHORT_SHA}
+  - ${_IMAGE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

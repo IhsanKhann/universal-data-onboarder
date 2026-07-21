@@ -1,0 +1,184 @@
+# monitoring/migration-alerts.yaml
+# Step 6 Observability — Cloud Run Job (migration-runner) alert rules.
+#
+# Cloud Run Jobs write structured logs to Cloud Logging automatically — no
+# Loki bridge, no sidecar, no config needed. These rules consume Cloud
+# Logging log-based metrics (created by provision-gcp.sh) and Cloud
+# Monitoring's built-in Cloud Run Job metrics.
+#
+# ── How to apply ─────────────────────────────────────────────────────────────
+# These Prometheus-style rules are for the Grafana/Prometheus stack running on
+# Hetzner (alerts.yaml is already deployed there). Import them into your
+# Grafana instance alongside alerts.yaml, or pipe them through alertmanager.
+#
+# For Cloud Monitoring native alerts (which fire even when Hetzner is down),
+# see the companion JSON files in monitoring/cloud-monitoring/ — apply with:
+#   gcloud alpha monitoring policies create --policy-from-file=<file>.json
+#
+# ── Log-based metrics (created by provision-gcp.sh) ─────────────────────────
+# The following metrics are created in Cloud Monitoring via
+# `gcloud logging metrics create`:
+#
+#   migration_job_executions_total
+#     Counts every Cloud Run Job execution finish event from Cloud Logging.
+#     Labels: job_name, status ("SUCCEEDED"|"FAILED"|"CANCELLED")
+#     Filter:
+#       resource.type="cloud_run_job"
+#       resource.labels.job_name="migration-runner"
+#       jsonPayload.finalStatus != ""
+#
+#   migration_import_completed_total
+#     Counts entrypoint log lines where finalStatus is "completed" or
+#     "completed_with_errors". Labels: final_status
+#     Filter:
+#       resource.type="cloud_run_job"
+#       jsonPayload.message="[cloudRunEntrypoint] pipeline complete"
+#
+#   migration_import_failed_total
+#     Counts entrypoint log lines where finalStatus is "failed" or
+#     "commit_failed". Labels: final_status
+#     Filter:
+#       resource.type="cloud_run_job"
+#       jsonPayload.message=~"\[cloudRunEntrypoint\] FAILED"
+
+groups:
+  # ── Cloud Run Job execution outcomes ──────────────────────────────────────
+  - name: migration_runner_cloud_run
+    rules:
+      # A failed Cloud Run Job execution means the container exited non-zero.
+      # This fires whenever ANY execution fails — guardrail_rejected is exit(0)
+      # by design, so that case does NOT trigger this alert.
+      - alert: MigrationJobExecutionFailed
+        expr: |
+          increase(migration_job_executions_total{status="FAILED"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Migration Cloud Run Job execution failed"
+          description: >
+            A migration-runner execution ended with a non-zero exit code —
+            the import job likely wrote status "failed" or "commit_failed" to
+            the DB. Check Cloud Logging:
+            resource.type="cloud_run_job" AND
+            resource.labels.job_name="migration-runner" AND
+            severity>=ERROR
+
+      # Sustained failure rate — multiple jobs failing in a window suggests
+      # a systemic issue (DB connectivity, image bug) rather than one bad file.
+      - alert: MigrationJobFailureRateSustained
+        expr: |
+          sum(rate(migration_job_executions_total{status="FAILED"}[30m]))
+          /
+          sum(rate(migration_job_executions_total[30m])) > 0.25
+        for: 10m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Migration job failure rate > 25% for 10 min"
+          description: >
+            More than 25% of Cloud Run Job executions are failing over the
+            last 30 minutes. Failure rate: {{ $value | humanizePercentage }}.
+            This suggests an infrastructure or code problem rather than
+            individual bad imports.
+
+      # A stuck/cancelled job usually means the 3600s task-timeout fired.
+      - alert: MigrationJobExecutionCancelled
+        expr: |
+          increase(migration_job_executions_total{status="CANCELLED"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Migration Cloud Run Job execution was cancelled (timeout?)"
+          description: >
+            A migration-runner execution was cancelled — this typically means
+            the 3600s task timeout fired. The import is likely a very large
+            file that needs the row ceiling tightened, or the DB connection
+            timed out. Check the GCS object size and tenant row limit.
+
+  # ── Import pipeline outcomes (from structured log metrics) ────────────────
+  - name: migration_import_outcomes
+    rules:
+      # Any pipeline failure logged by the entrypoint warrants attention.
+      - alert: MigrationImportPipelineFailed
+        expr: |
+          increase(migration_import_failed_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Migration import pipeline logged a FAILED status"
+          description: >
+            The Cloud Run entrypoint logged finalStatus="failed" or
+            "commit_failed". The import job has status "failed" in the tenant
+            DB. Tenant and import job ID are in the log:
+            resource.type="cloud_run_job" AND
+            jsonPayload.message=~"FAILED"
+
+      # Commit failures are the worst case: rows were staged and validated but
+      # could not be committed — meaning no data landed despite a full run.
+      - alert: MigrationImportCommitFailed
+        expr: |
+          increase(migration_import_failed_total{final_status="commit_failed"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Migration import reached commit_failed — no data landed"
+          description: >
+            A validated import job could not commit its rows. This is the
+            highest-severity migration failure: the operator's data was fully
+            processed but not written. Check the commitBatch error in Cloud
+            Logging and the tenant's DB availability.
+
+      # High guardrail rejection rate may indicate mis-configured limits or
+      # an operator trying repeatedly with a file that will never pass.
+      - alert: MigrationGuardrailRejectionRateHigh
+        expr: |
+          sum(rate(migration_guardrail_rejections_total[30m]))
+          /
+          (sum(rate(migration_import_completed_total[30m])) + sum(rate(migration_guardrail_rejections_total[30m])) + 0.001) > 0.50
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "More than 50% of migration uploads are hitting the guardrail"
+          description: >
+            Half of recent migration imports are being rejected by the row
+            or byte ceiling guardrail. The limit may be mis-configured for
+            this tenant tier, or operators are uploading files that are too large.
+            Guardrail rejection rate: {{ $value | humanizePercentage }}.
+
+  # ── Staging bucket (GCS) ─────────────────────────────────────────────────
+  - name: migration_gcs
+    rules:
+      # Objects that have been in the staging bucket for more than 24h are
+      # orphaned — the upload-complete call was never made or the Cloud Run
+      # Job never ran. They waste GCS storage and signal a stuck flow.
+      # Implemented as a Cloud Monitoring metric (gcs_bucket/object_count
+      # per age bucket) — only available as a Cloud Monitoring alert, not
+      # Prometheus. The Prometheus rule below is a placeholder showing intent;
+      # see monitoring/cloud-monitoring/gcs-orphan-alert.json for the real one.
+      - alert: MigrationStagingBucketOrphanedObjects
+        expr: |
+          gcs_bucket_object_age_seconds{bucket_name="offerberries-migration-staging"} > 86400
+        for: 1h
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "GCS staging bucket has objects older than 24h"
+          description: >
+            Objects in the staging bucket older than 24 hours suggest
+            abandoned uploads (pending_upload jobs where upload-complete was
+            never called, or Cloud Run Jobs that were never triggered).
+            These can be cleaned up by running:
+              gsutil -m rm "gs://offerberries-migration-staging/**" (older than threshold)
+            Check import jobs with status "pending_upload" older than 24h.

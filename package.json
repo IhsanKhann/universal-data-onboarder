@@ -1,0 +1,77 @@
+{
+  "name": "@offerberries/universal-data-onboarder",
+  "version": "0.1.0",
+  "description": "Universal Data Onboarding Engine — standalone, adapter-driven import pipeline extracted from OfferBerries. CSV/JSON/XLSX/SQL streaming parser, guardrail, mapping, validation, and idempotent commit engine.",
+  "type": "module",
+  "main": "core/index.js",
+  "types": "registry/TargetDescriptor.d.ts",
+  "exports": {
+    ".": "./core/index.js",
+    "./core/*": "./core/*.js",
+    "./registry/*": "./registry/*.js",
+    "./orchestration/*": "./orchestration/*.js",
+    "./orchestration/jobStore": "./orchestration/jobStore.js",
+    "./orchestration/adapters/*": "./orchestration/adapters/*.js",
+    "./queueing/*": "./queueing/*.js",
+    "./storage/*": "./storage/*.js",
+    "./topology/*": "./topology/*.js",
+    "./http/*": "./http/*.js",
+    "./worker/*": "./worker/*.js",
+    "./utils/*": "./utils/*.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --passWithNoTests",
+    "test:e2e": "node --experimental-vm-modules node_modules/.bin/jest --config jest.e2e.config.js --passWithNoTests",
+    "test:contract": "node --experimental-vm-modules node_modules/.bin/jest --testMatch '**/__contract-tests__/*.test.js'",
+    "lint": "eslint .",
+    "check": "node --check core/**/*.js registry/**/*.js orchestration/**/*.js worker/**/*.js",
+    "prepublishOnly": "npm run test && npm run check"
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.0",
+    "stream-json": "^1.9.1",
+    "mongoose": "^8.0.0",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.4.0",
+    "express": "^4.18.0",
+    "multer": "^1.4.5-lts.1",
+    "joi": "^17.12.0",
+    "@google-cloud/storage": "^7.0.0"
+  },
+  "optionalDependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "peerDependencies": {
+    "mongoose": "^8.0.0",
+    "bullmq": "^5.0.0",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.57.0"
+  },
+  "keywords": [
+    "data-onboarding",
+    "import",
+    "migration",
+    "csv",
+    "json",
+    "excel",
+    "sql",
+    "etl",
+    "universal",
+    "data-pipeline"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/offerberries/universal-data-onboarder"
+  },
+  "bugs": {
+    "url": "https://github.com/offerberries/universal-data-onboarder/issues"
+  },
+  "homepage": "https://github.com/offerberries/universal-data-onboarder#readme"
+}

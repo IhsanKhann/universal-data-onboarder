@@ -1,0 +1,79 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Universal Data Onboarding Engine — Self-hosted Deployment
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Brings up:
+#   - MongoDB (single-node replica set for transaction support)
+#   - Redis (for BullMQ queue)
+#   - The engine worker (parse → guardrail → stage → map → validate → commit)
+#   - (Optional) The HTTP upload API — mount uploadRoutes.js in your own app
+#
+# Usage:
+#   docker compose -f docker-compose.selfhosted.yml up -d
+#
+# For development, see the testbed repo:
+#   universal-data-onboarder-testbed/server.js
+#
+# ── Notes ─────────────────────────────────────────────────────────────────────
+# - MongoDB is configured as a single-node replica set (required for Mongoose
+#   transactions). On first start, run:
+#     docker exec -it onboarder-mongo mongosh --eval 'rs.initiate()'
+# - The worker container uses the local-fs storage adapter by default.
+#   Mount a volume for persistent file storage.
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: onboarder-mongo
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: onboarder-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    image: universal-data-onboarder:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    container_name: onboarder-worker
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/onboarder
+      - REDIS_URL=redis://redis:6379
+      - QUEUE_ADAPTER=in-memory
+      - STORAGE_ADAPTER=local-fs
+      - LOCAL_STORAGE_DIR=/data/uploads
+      - LOG_LEVEL=info
+      - TENANT_ID=local-dev-tenant
+      - GCS_BUCKET=
+    volumes:
+      - upload-data:/data/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Override CMD for the self-hosted entrypoint
+    command: ["node", "worker/cloudRunEntrypoint.js"]
+
+volumes:
+  mongo-data:
+  upload-data:

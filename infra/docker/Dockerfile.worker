@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Universal Data Onboarding Engine — Worker Image
+#
+# A multi-stage build that produces a minimal runtime image for the import
+# pipeline worker. The CMD entrypoint is configurable via build ARG so the
+# same image can run against different entrypoint files:
+#
+#   docker build \
+#     --build-arg ENTRYPOINT=worker/cloudRunEntrypoint.js \
+#     -t onboarder-worker .
+#
+# Or for the BullMQ commit worker:
+#
+#   docker build \
+#     --build-arg ENTRYPOINT=worker/bullmqCommitWorker.js \
+#     -t onboarder-commit-worker .
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Build ARGs ────────────────────────────────────────────────────────────────
+ARG NODE_VERSION=22-alpine
+ARG ENTRYPOINT=worker/cloudRunEntrypoint.js
+
+# ── Stage 1: install production deps ─────────────────────────────────────────
+FROM node:${NODE_VERSION} AS deps
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev --legacy-peer-deps
+
+# ── Stage 2: final runtime image ─────────────────────────────────────────────
+FROM node:${NODE_VERSION} AS release
+ARG ENTRYPOINT
+WORKDIR /app
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# No EXPOSE / no HEALTHCHECK: a worker process has no port to listen on and
+# nothing to health-check. The process runs to completion and exits; the exit
+# code IS the job result.
+
+CMD ["node", "/app/worker/cloudRunEntrypoint.js"]
+# ^ Will be overridden by --build-arg ENTRYPOINT at build time.
