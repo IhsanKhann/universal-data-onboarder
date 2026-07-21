@@ -16,29 +16,37 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: universal-data-onboarder
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
+          cache-dependency-path: universal-data-onboarder/package-lock.json
+
+      - name: Checkout testbed
+        uses: actions/checkout@v4
+        with:
+          repository: IhsanKhann/universal-data-onboarder-testbed
+          path: universal-data-onboarder-testbed
 
       - name: Install engine dependencies
         run: npm ci
+        working-directory: universal-data-onboarder
 
-      - name: Setup testbed
-        run: |
-          git clone https://github.com/IhsanKhann/universal-data-onboarder-testbed.git \
-            ../universal-data-onboarder-testbed
-          cd ../universal-data-onboarder-testbed
-          npm ci
+      - name: Install testbed dependencies
+        run: npm ci
+        working-directory: universal-data-onboarder-testbed
 
       - name: Run Jest tests (engine)
-        run: npm test -- --passWithNoTests
-        continue-on-error: true
+        run: npm test
+        working-directory: universal-data-onboarder
 
       - name: Run native e2e tests (testbed)
-        run: node ../universal-data-onboarder-testbed/tests/e2e-native-runner.mjs
+        run: node tests/e2e-native-runner.mjs
+        working-directory: universal-data-onboarder-testbed
         continue-on-error: ${{ matrix.node-version == 22 }}
 
       - name: Upload test artifacts on failure
@@ -47,5 +55,5 @@ jobs:
         with:
           name: test-results-${{ matrix.node-version }}
           path: |
-            **/test-results/**
-            **/TEST_OUTPUT.md
+            universal-data-onboarder/test-results/**
+            universal-data-onboarder/TEST_OUTPUT.md
