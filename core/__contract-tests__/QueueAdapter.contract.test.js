@@ -55,3 +55,4 @@ export function runQueueAdapterContract(label, adapter) {
     });
   });
 }
+test('contract suite placeholder — implement per-adapter tests here', () => {});

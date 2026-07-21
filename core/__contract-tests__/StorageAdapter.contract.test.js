@@ -68,3 +68,4 @@ export function runStorageAdapterContract(label, adapter, { bucketName }) {
     });
   });
 }
+test('contract suite placeholder — implement per-adapter tests here', () => {});

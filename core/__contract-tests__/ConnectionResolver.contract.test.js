@@ -37,3 +37,4 @@ export function runConnectionResolverContract(label, resolver) {
     });
   });
 }
+test('contract suite placeholder — implement per-adapter tests here', () => {});
